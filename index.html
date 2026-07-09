@@ -1075,6 +1075,9 @@ function renderScanBar(terr){
 }
 
 function renderFeeds(terr){
+  // a scan finishing mid-keystroke must never eat a rep's note
+  const ae=document.activeElement;
+  if(ae&&ae.classList&&ae.classList.contains("notes")&&ae.dataset.key)setLeadState(ae.dataset.key,{notes:ae.value});
   const T=TERR[terr];
   const items=allLeads(terr).filter(passFilter);
   const hotEl=$("#feed-"+terr+"-hottest");
@@ -1228,7 +1231,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   });
   document.addEventListener("input",ev=>{
     const t=ev.target;
-    if(t.matches("[data-f-q]")){FILTER.q=t.value;clearTimeout(t._tt);t._tt=setTimeout(()=>renderFeeds(currentTerr()),200)}
+    if(t.matches("[data-f-q]")){FILTER.q=t.value;clearTimeout(t._tt);t._tt=setTimeout(()=>renderFeeds(currentTerr()),200);return}
+    if(t.matches(".notes")){clearTimeout(t._nt);t._nt=setTimeout(()=>setLeadState(t.dataset.key,{notes:t.value}),400)}
   });
   document.addEventListener("change",ev=>{
     const t=ev.target;

@@ -190,7 +190,7 @@ async function spillScan(){
       if(!pfas&&(!isFinite(qn)||qn<60))return;
       if(excl(x.facility_name))return;
       const hasQty=!!(x.quantity&&parseFloat(x.quantity)>0);
-      pushLead("ny",{source:"NY Spill DB",name:x.facility_name||x.locality||"Spill site",location:`${x.locality||""}, ${x.county} Co.`,date:(x.spill_date||"").slice(0,10),hot:SPILL.test(mat),pfas,volUnknown:!hasQty,desc:`${mat} — ${hasQty?(x.quantity+" "+(x.units||"")):"quantity not reported, call to confirm scale"}. ${x.contributing_factor||""}`});
+      pushLead("ny",{source:"NY Spill DB",name:x.facility_name||x.locality||"Spill site",url:"https://data.ny.gov/Energy-Environment/Spill-Incidents/u44d-k5fk",location:`${x.locality||""}, ${x.county} Co.`,date:(x.spill_date||"").slice(0,10),hot:SPILL.test(mat),pfas,volUnknown:!hasQty,desc:`${mat} — ${hasQty?(x.quantity+" "+(x.units||"")):"quantity not reported, call to confirm scale"}. ${x.contributing_factor||""}`});
     });
   }catch(e){ out.errors.push("NY spills: "+e.message); }
 }
@@ -206,7 +206,7 @@ async function remediationScans(){
       if(excl(name)||seen.has(name))return; seen.add(name);
       const blob=JSON.stringify(x);
       const pfas=/pfas|pfoa|pfos|perfluor/i.test(blob)||likelyAFFF(name);
-      pushLead("ny",{source:"NYSDEC",name,location:`${x.address1||x.address||""}, ${x.locality||""} (${x.county} Co.)`,cls:"Class 02 — active",pfas,hot:pfas,registry:true,lat:parseFloat(x.latitude)||null,lon:parseFloat(x.longitude)||null,desc:(x.program_type||"State remediation")+(pfas?" — PFAS/AFFF flagged, verify":"")});
+      pushLead("ny",{source:"NYSDEC",name,url:"https://data.ny.gov/Energy-Environment/Environmental-Remediation-Sites/c6ci-rzpg",location:`${x.address1||x.address||""}, ${x.locality||""} (${x.county} Co.)`,cls:"Class 02 — active",pfas,hot:pfas,registry:true,lat:parseFloat(x.latitude)||null,lon:parseFloat(x.longitude)||null,desc:(x.program_type||"State remediation")+(pfas?" — PFAS/AFFF flagged, verify":"")});
     });
   }catch(e){ out.errors.push("NYSDEC: "+e.message); }
   // NJDEP KCS — north and south splits
@@ -221,7 +221,7 @@ async function remediationScans(){
         if(excl(name)||n>=60)return; n++;
         const blob=JSON.stringify(a);
         const pfas=/pfas|pfoa|pfos|perfluor/i.test(blob)||likelyAFFF(name);
-        pushLead(terr,{source:"NJDEP KCS",name,location:`${a.ADDRESS||""}, ${a.MUNICIPALITY||""} (${a.COUNTY||""} Co.)`,pfas,hot:pfas,registry:true,lat:parseFloat(a.LATITUDE||a.Y)||null,lon:parseFloat(a.LONGITUDE||a.X)||null,desc:(a.STATUS||"Known contaminated site")+(pfas?" — PFAS/AFFF flagged, verify":"")});
+        pushLead(terr,{source:"NJDEP KCS",name,url:"https://www.nj.gov/dep/srp/kcsnj/",location:`${a.ADDRESS||""}, ${a.MUNICIPALITY||""} (${a.COUNTY||""} Co.)`,pfas,hot:pfas,registry:true,lat:parseFloat(a.LATITUDE||a.Y)||null,lon:parseFloat(a.LONGITUDE||a.X)||null,desc:(a.STATUS||"Known contaminated site")+(pfas?" — PFAS/AFFF flagged, verify":"")});
       });
     }catch(e){ out.errors.push("NJDEP KCS "+terr+": "+e.message); }
   }
@@ -243,7 +243,7 @@ async function remediationScans(){
       if(n>=60)return; n++;
       const blob=JSON.stringify(a);
       const pfas=/pfas|pfoa|pfos|perfluor|afff/i.test(blob)||likelyAFFF(name);
-      pushLead(terr,{source:"NJDEP IEC",name,location:`${a.ADDRESS||a.STREET||""}, ${muni} (${cty} Co.)`,cls:"Immediate Environmental Concern",hot:true,pfas,lat:parseFloat(a.LATITUDE||a.LAT||a.Y)||null,lon:parseFloat(a.LONGITUDE||a.LONG||a.X)||null,desc:"PRIORITY remediation — immediate environmental concern. Urgent contaminated-soil and remediation-waste cleanout."+(pfas?" PFAS/AFFF flagged, verify.":"")+" Call responsible party or LSRP early."});
+      pushLead(terr,{source:"NJDEP IEC",name,url:"https://www.nj.gov/dep/srp/kcsnj/",location:`${a.ADDRESS||a.STREET||""}, ${muni} (${cty} Co.)`,cls:"Immediate Environmental Concern",hot:true,pfas,lat:parseFloat(a.LATITUDE||a.LAT||a.Y)||null,lon:parseFloat(a.LONGITUDE||a.LONG||a.X)||null,desc:"PRIORITY remediation — immediate environmental concern. Urgent contaminated-soil and remediation-waste cleanout."+(pfas?" PFAS/AFFF flagged, verify.":"")+" Call responsible party or LSRP early."});
     });
   }catch(e){ out.errors.push("NJ IEC: "+e.message); }
   // CT DEEP open remediation cases
@@ -257,7 +257,7 @@ async function remediationScans(){
       const dk=(name+"|"+(x.official_town||"")).toUpperCase(); if(seen.has(dk)||n>=80)return; seen.add(dk); n++;
       const prog=x.case_program||"";
       const pfas=/pfas|pfoa|pfos|perfluor|afff/i.test(name+" "+prog)||likelyAFFF(name);
-      pushLead("ct",{source:"CT DEEP Sites",name,location:((x.case_address||"").replace(/,?\s*US$/,""))+" ("+(x.official_town||"")+", CT)",cls:prog.slice(0,30),pfas,hot:pfas,registry:true,lat:parseFloat(x.site_id_latitude)||null,lon:parseFloat(x.site_id_longitude)||null,desc:prog+" · "+(x.case_status||"Open")+(pfas?" — PFAS/AFFF, verify":"")});
+      pushLead("ct",{source:"CT DEEP Sites",name,url:"https://data.ct.gov/Environment-and-Natural-Resources/Contaminated-or-Potentially-Contaminated-Sites-Lis/xcxg-6jqp",location:((x.case_address||"").replace(/,?\s*US$/,""))+" ("+(x.official_town||"")+", CT)",cls:prog.slice(0,30),pfas,hot:pfas,registry:true,lat:parseFloat(x.site_id_latitude)||null,lon:parseFloat(x.site_id_longitude)||null,desc:prog+" · "+(x.case_status||"Open")+(pfas?" — PFAS/AFFF, verify":"")});
     });
   }catch(e){ out.errors.push("CT DEEP: "+e.message); }
   // MassDEP C21e
@@ -277,7 +277,7 @@ async function remediationScans(){
           const blob=JSON.stringify(a).toLowerCase();
           const pfas=/pfas|pfoa|pfos|perfluor|afff/.test(blob)||likelyAFFF(name);
           const g=f.geometry||{};
-          pushLead("ma",{source:"MassDEP 21E",name,location:(a.ADDRESS||a.Address||"")+", "+town+" (MA)",pfas,hot:pfas,registry:true,lat:g.y||null,lon:g.x||null,desc:(a.STATUS||a.Status||"MGL c.21E tier-classified site")+(pfas?" — PFAS-flagged":"")});
+          pushLead("ma",{source:"MassDEP 21E",name,url:"https://eeaonline.eea.state.ma.us/portal#!/search/wastesite",location:(a.ADDRESS||a.Address||"")+", "+town+" (MA)",pfas,hot:pfas,registry:true,lat:g.y||null,lon:g.x||null,desc:(a.STATUS||a.Status||"MGL c.21E tier-classified site")+(pfas?" — PFAS-flagged":"")});
         });
         done=true;
       }catch(e){ lastErr=e; }
@@ -328,7 +328,7 @@ async function complyScans(){
         if(counties&&!counties.some(c=>cty.includes(c)))return;
         const name=f.facility_name||f.FACILITY_NAME||"";
         if(!name||excl(name)||n>=25)return; n++;
-        pushLead(terr,{source:"EPA TRI",name,location:`${f.city_name||f.CITY_NAME||""}, ${cty||st}`,cls:"TRI reporter",registry:true,desc:"Already generating and paying for industrial waste disposal — ZWTL conversion conversation."});
+        pushLead(terr,{source:"EPA TRI",name,url:"https://enviro.epa.gov/envirofacts/tri/search",location:`${f.city_name||f.CITY_NAME||""}, ${cty||st}`,cls:"TRI reporter",registry:true,desc:"Already generating and paying for industrial waste disposal — ZWTL conversion conversation."});
       });
     }catch(e){ out.errors.push("TRI "+terr+": "+e.message); }
   }
@@ -343,7 +343,7 @@ async function complyScans(){
       if(!name||excl(name))return;
       const dk=name.toUpperCase(); if(seen.has(dk))return; seen.add(dk);
       if(n>=30)return; n++;
-      pushLead("ny",{source:"NYSDEC Title V",name,location:`${x.facility_city||x.city||""}, ${cty} Co.`,cls:"Title V air permit",registry:true,desc:"Emits regulated hazardous air pollutants under Title V — heavy industrial, generates profiled/RCRA waste. Routing + ZWTL target. Qualify streams, volume, current vendor."});
+      pushLead("ny",{source:"NYSDEC Title V",name,url:"https://data.ny.gov/Energy-Environment/Title-V-Emissions-Inventory-Beginning-2010/4ry5-tfin",location:`${x.facility_city||x.city||""}, ${cty} Co.`,cls:"Title V air permit",registry:true,desc:"Emits regulated hazardous air pollutants under Title V — heavy industrial, generates profiled/RCRA waste. Routing + ZWTL target. Qualify streams, volume, current vendor."});
     });
   }catch(e){ out.errors.push("Title V: "+e.message); }
 }
@@ -359,7 +359,7 @@ async function eventsScans(){
       if(!/DEMOLITION|\bDM\b/.test(wt)||n>=20)return;
       const oname=[x.owner_business_name,x.applicant_business_name].find(v=>v&&!/not applicable|n\/a/i.test(v))||`${x.house_no||""} ${x.street_name||""}`.trim()||"Demolition site";
       n++;
-      pushLead("ny",{source:"NYC DOB",name:oname,location:`${x.house_no||""} ${x.street_name||""}, ${x.borough||""}`,date:(x.issued_date||"").slice(0,10),cls:"Demolition permit",hot:true,desc:"Full demolition permitted — contaminated soil, asbestos abatement waste, and industrial cleanout streams incoming."});
+      pushLead("ny",{source:"NYC DOB",name:oname,url:"https://data.cityofnewyork.us/Housing-Development/DOB-Permit-Issuance/rbx6-tga4",location:`${x.house_no||""} ${x.street_name||""}, ${x.borough||""}`,date:(x.issued_date||"").slice(0,10),cls:"Demolition permit",hot:true,desc:"Full demolition permitted — contaminated soil, asbestos abatement waste, and industrial cleanout streams incoming."});
     });
   }catch(e){ out.errors.push("NYC DOB: "+e.message); }
   try{
@@ -371,7 +371,7 @@ async function eventsScans(){
       if(!/^1/.test(x.incident_type||"")&&!/FIRE/i.test(it))return;
       if(!/WAREHOUSE|STORAGE|MANUFACT|MERCANTILE|BUSINESS|INDUSTR|FOOD|LABORATOR/.test(pu)||n>=15)return;
       n++;
-      pushLead("ny",{source:"FDNY",name:pu.slice(0,60),location:`${x.borough_desc||x.borough||""}`,date:(x.incident_date_time||"").slice(0,10),cls:"Commercial fire",hot:true,desc:(it||"Structure fire")+" at commercial property — fire/smoke/water-damaged inventory needs certified destruction for insurance."});
+      pushLead("ny",{source:"FDNY",name:pu.slice(0,60),url:"https://data.cityofnewyork.us/Public-Safety/Incidents-Responded-to-by-Fire-Companies/tm6d-hbzd",location:`${x.borough_desc||x.borough||""}`,date:(x.incident_date_time||"").slice(0,10),cls:"Commercial fire",hot:true,desc:(it||"Structure fire")+" at commercial property — fire/smoke/water-damaged inventory needs certified destruction for insurance."});
     });
   }catch(e){ out.errors.push("FDNY: "+e.message); }
   try{
@@ -383,7 +383,7 @@ async function eventsScans(){
       const name=x.facility_name||x.site_name||x.name||"";
       if(!name||seen.has(name)||n>=20)return;
       seen.add(name);n++;
-      pushLead("ny",{source:"NYSDEC CBS",name,location:`${x.locality||x.city||""}, ${x.county} Co.`,cls:"Chemical bulk storage",registry:true,desc:"Registered chemical bulk storage facility — standing profiled-waste and RCRA routing prospect."});
+      pushLead("ny",{source:"NYSDEC CBS",name,url:"https://data.ny.gov/Energy-Environment/Chemical-Bulk-Storage-CBS-Facilities/pteg-c78n",location:`${x.locality||x.city||""}, ${x.county} Co.`,cls:"Chemical bulk storage",registry:true,desc:"Registered chemical bulk storage facility — standing profiled-waste and RCRA routing prospect."});
     });
   }catch(e){ out.errors.push("NYSDEC CBS: "+e.message); }
   for(const [terr,courts,loc] of [["ny","nysb+nyeb","SDNY/EDNY"],["nnj","njb","D.N.J."],["snj","njb","D.N.J."],["ct","ctb","D. Conn."],["ma","mab","D. Mass."]]){
@@ -393,7 +393,7 @@ async function eventsScans(){
       ((j&&j.results)||[]).forEach(x=>{
         const name=x.caseName||x.case_name||"";
         if(!name||n>=12)return; n++;
-        pushLead(terr,{source:"Bankruptcy Ct",name:name.slice(0,80),location:loc,date:(x.dateFiled||x.date_filed||"").slice(0,10),cls:"Filing",desc:"Recent bankruptcy filing — if distributor/retailer/manufacturer, liquidated inventory may need certified brand-protection destruction. Verify entity type."});
+        pushLead(terr,{source:"Bankruptcy Ct",name:name.slice(0,80),url:"https://www.courtlistener.com/?type=r&q=chapter&order_by=dateFiled+desc",location:loc,date:(x.dateFiled||x.date_filed||"").slice(0,10),cls:"Filing",desc:"Recent bankruptcy filing — if distributor/retailer/manufacturer, liquidated inventory may need certified brand-protection destruction. Verify entity type."});
       });
     }catch(e){ out.errors.push("Bankruptcy "+terr+": "+e.message); }
   }
