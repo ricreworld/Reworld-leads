@@ -289,4 +289,6 @@ Status: ✅ decided · 🔶 open · ↩️ reversed (link the superseding row).
 
 | D-031 | 2026-07-09 | "Find contacts" ghost button added to the card action row — opens a LinkedIn people search pre-filtered to the company plus EHS/environmental/facilities/plant-manager titles | Ricardo asked for in-page enrichment. Automated enrichment written into leads.json would publish lead-site operator PII on a public page (violates the standing PII rule and provider ToS), so the in-page affordance is a deep link; actual enrichment stays in private channels (chat/Clay/Apollo) | ✅ |
 
+| D-032 | 2026-07-09 | Scan bar shows "via overnight scan ✓" (Live tick, no alarm) when a live browser source fails but the overnight scan already delivered that source's records; red failure text is reserved for sources with no data from either path | EPA ECHO routinely rejects cross-origin browser calls (the old tool had a canned "browser blocked" message for it) while the nightly server-side pull succeeds — a red "results may be incomplete" was factually wrong and trained reps to ignore the bar | ✅ |
+
 *Add new rows below as decisions are made during the build.*
