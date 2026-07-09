@@ -287,4 +287,6 @@ Status: ✅ decided · 🔶 open · ↩️ reversed (link the superseding row).
 | D-029 | 2026-07-09 | Territory tabs get #hash deep links (#new-york … #massachusetts) — shareable URLs, restored on load, back/forward-safe via hashchange | A launch-ready page needs linkable territory views; hash routing keeps the tool a single static file | ✅ |
 | D-030 | 2026-07-09 | Canonical/OG/sitemap URLs point at the live GitHub Pages origin until the production domain is attached; swap is a find-and-replace across index.html, robots.txt, sitemap.xml | Absolute URLs are required by the OG spec and sitemaps; the Pages URL is the only origin that exists today | 🔶 |
 
+| D-031 | 2026-07-09 | "Find contacts" ghost button added to the card action row — opens a LinkedIn people search pre-filtered to the company plus EHS/environmental/facilities/plant-manager titles | Ricardo asked for in-page enrichment. Automated enrichment written into leads.json would publish lead-site operator PII on a public page (violates the standing PII rule and provider ToS), so the in-page affordance is a deep link; actual enrichment stays in private channels (chat/Clay/Apollo) | ✅ |
+
 *Add new rows below as decisions are made during the build.*
