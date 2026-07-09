@@ -468,8 +468,167 @@ async function bidScans(){
   }catch(e){ out.errors.push("NJSTART bids: "+e.message); }
 }
 
+
+/* ---------------- NEW SOURCES (docs/SOURCES.md wiring, 2026-07-09) ---------------- */
+
+// APHIS HPAI detections — poultry flocks + mammals/livestock. Depopulation/disposal events.
+async function hpaiScan(){
+  const PAGES=[
+    ["https://www.aphis.usda.gov/livestock-poultry-disease/avian/avian-influenza/hpai-detections/commercial-backyard-flocks","flocks"],
+    ["https://www.aphis.usda.gov/livestock-poultry-disease/avian/avian-influenza/hpai-detections/mammals","mammals/livestock"]
+  ];
+  const STATES=[["New York",["ny"]],["New Jersey",["nnj","snj"]],["Connecticut",["ct"]],["Massachusetts",["ma"]]];
+  for(const [pageUrl,kind] of PAGES){
+    try{
+      const html=await getText(pageUrl);
+      // prefer a linked CSV dataset if the page offers one
+      const csvHref=(html.match(/href="([^"]+\.csv[^"]*)"/i)||[])[1];
+      let rows=[];
+      if(csvHref){
+        const csvUrl=csvHref.startsWith("http")?csvHref:new URL(csvHref,pageUrl).href;
+        const csv=await getText(csvUrl);
+        rows=csv.split(/\r?\n/);
+      }else{
+        rows=html.replace(/<[^>]+>/g,"|").split(/\n|\|{2,}/);
+      }
+      const since=Date.now()-60*864e5;
+      let n=0;
+      for(const row of rows){
+        for(const [stName,terrs] of STATES){
+          if(!row.includes(stName))continue;
+          const dm=row.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})|(\d{4}-\d{2}-\d{2})/);
+          const dt=dm?new Date(dm[0]):null;
+          if(dt&&isFinite(+dt)&&+dt<since)continue;
+          if(n>=20)break;
+          n++;
+          const county=(row.match(new RegExp(stName+"[^a-zA-Z]*([A-Za-z .]{3,30}?)\\s*(County|Co\\.|,)","i"))||[])[1]||"";
+          for(const t of terrs)pushLead(t,{source:"APHIS HPAI",name:("HPAI detection — "+(county?county+" County, ":"")+stName).slice(0,80),
+            location:(county?county+" County, ":"")+stName,date:dt&&isFinite(+dt)?dt.toISOString().slice(0,10):"",
+            cls:"HPAI "+kind,hot:true,aphis:true,url:pageUrl,
+            desc:"Confirmed HPAI detection ("+kind+") — depopulation and carcass/litter disposal event. APHIS-regulated material: route per facility APHIS rules (never Babylon). Row: "+row.replace(/\s+/g," ").trim().slice(0,140)});
+        }
+      }
+      if(!n)out.errors.push("APHIS HPAI "+kind+": page fetched, no recent rows matched territory states — check page format");
+    }catch(e){ out.errors.push("APHIS HPAI "+kind+": "+e.message); }
+  }
+}
+
+// SAM.gov federal opportunities — needs free API key as Actions secret SAM_API_KEY (rotate every 90 days).
+async function samScan(){
+  const key=process.env.SAM_API_KEY;
+  if(!key){ out.errors.push("SAM.gov: SAM_API_KEY not set — create a free key at sam.gov (Account Details) and add it as a repo Actions secret"); return; }
+  const fmt=d=>{const p=n=>String(n).padStart(2,"0");return p(d.getMonth()+1)+"/"+p(d.getDate())+"/"+d.getFullYear()};
+  const to=new Date(),from=new Date(Date.now()-30*864e5);
+  const CFG=[["NY",["ny"]],["NJ",["nnj","snj"]],["CT",["ct"]],["MA",["ma"]]];
+  for(const [st,terrs] of CFG){
+    try{
+      const u=`https://api.sam.gov/opportunities/v2/search?api_key=${encodeURIComponent(key)}&postedFrom=${encodeURIComponent(fmt(from))}&postedTo=${encodeURIComponent(fmt(to))}&state=${st}&ncode=562910&limit=40`;
+      const j=await get(u);
+      let n=0;
+      ((j&&j.opportunitiesData)||[]).forEach(o=>{
+        if(n>=15)return;n++;
+        const rec={source:"SAM.gov",name:(o.title||"Federal solicitation").slice(0,90),
+          location:((o.placeOfPerformance&&o.placeOfPerformance.city&&o.placeOfPerformance.city.name)||"")+", "+st,
+          date:(o.postedDate||"").slice(0,10),cls:(o.type||"Solicitation").slice(0,30),bid:true,
+          url:o.uiLink||("https://sam.gov/opp/"+(o.noticeId||"")),
+          desc:("Federal environmental remediation opportunity ("+(o.solicitationNumber||o.noticeId||"")+") — "+(o.fullParentPathName||"")).slice(0,220)};
+        terrs.forEach(t=>pushBid(t,{...rec}));
+      });
+    }catch(e){ out.errors.push("SAM.gov "+st+": "+e.message); }
+  }
+}
+
+// CTsource / Proactis WebProcure public bid board (CT state solicitations).
+async function ctsourceScan(){
+  try{
+    const html=await getText("https://webprocure.proactiscloud.com/wp-web-public/");
+    const text=html.replace(/<[^>]+>/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ");
+    if(text.trim().length<1500){ out.errors.push("CTsource: WebProcure board looks JS-rendered — needs a headless/API route; investigate network calls"); return; }
+    const chunks=text.split(/(?=Solicitation|RFP|Invitation to Bid|ITB|RFQ)/i).slice(0,200);
+    let n=0;
+    for(const c of chunks){
+      if(n>=20)break;
+      if(!/environmental|hazardous|remediation|contaminat|waste|pfas|asbestos|landfill|recycl|water treatment/i.test(c))continue;
+      n++;
+      pushBid("ct",{source:"CTsource",name:c.trim().slice(0,90),location:"State of Connecticut",cls:"Environmental",bid:true,
+        url:"https://webprocure.proactiscloud.com/wp-web-public/",
+        desc:c.trim().slice(0,200)+" — public board, no account needed to view."});
+    }
+    if(!n)out.errors.push("CTsource: board fetched, 0 environmental matches this pass");
+  }catch(e){ out.errors.push("CTsource: "+e.message); }
+}
+
+// COMMBUYS public bid search (MA state + municipal). Same BuySpeed/bso family as NJSTART.
+async function commbuysScan(){
+  try{
+    const html=await getText("https://www.commbuys.com/bso/external/publicBids.sdo");
+    const text=html.replace(/<[^>]+>/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ");
+    const rowRe=/(BD-\d{2}-[A-Z0-9-]+)\s+(.{10,160}?)\s+(\d{2}\/\d{2}\/\d{4})/g;
+    let m,n=0;
+    while((m=rowRe.exec(text))&&n<20){
+      const desc=(m[2]||"").trim();
+      if(!/environmental|hazardous|remediation|contaminat|waste|pfas|asbestos|landfill|recycl|water/i.test(desc))continue;
+      n++;
+      pushBid("ma",{source:"COMMBUYS",name:desc.slice(0,90),location:"Massachusetts",date:m[3],cls:"Environmental",bid:true,
+        url:"https://www.commbuys.com/bso/external/publicBids.sdo",
+        desc:"Solicitation "+m[1]+" — "+desc.slice(0,160)+". Public listing; documents free on COMMBUYS."});
+    }
+    if(!n)out.errors.push("COMMBUYS: page fetched, 0 environmental bid rows matched — verify row regex against live HTML");
+  }catch(e){ out.errors.push("COMMBUYS: "+e.message); }
+}
+
+// NY iMapInvasives occurrences via GBIF (no login; Darwin Core publication path).
+async function invasiveScan(){
+  try{
+    const ds=await get("https://api.gbif.org/v1/dataset/search?q=iMapInvasives&limit=5");
+    const hit=((ds&&ds.results)||[]).find(d=>/imapinvasives/i.test(d.title||""));
+    if(!hit){ out.errors.push("iMapInvasives: no GBIF dataset matched — verify publication path"); return; }
+    const yr=new Date().getFullYear();
+    const j=await get(`https://api.gbif.org/v1/occurrence/search?datasetKey=${hit.key}&stateProvince=New%20York&year=${yr-1},${yr}&limit=120`);
+    const seen=new Set();let n=0;
+    ((j&&j.results)||[]).forEach(o=>{
+      const sp=o.vernacularName||o.species||o.scientificName||"";
+      if(!INVASIVE.test(sp))return;
+      const loc=[o.county,o.locality].filter(Boolean).join(", ");
+      const dk=(sp+"|"+(o.county||"")).toUpperCase();
+      if(seen.has(dk)||n>=15)return;seen.add(dk);n++;
+      pushLead("ny",{source:"iMapInvasives (GBIF)",name:(sp+" — "+(o.county||"NY")).slice(0,80),
+        location:loc||"New York",date:(o.eventDate||"").slice(0,10),cls:"Invasive detection",
+        lat:o.decimalLatitude||null,lon:o.decimalLongitude||null,
+        url:"https://www.nyimapinvasives.org/",
+        desc:"Recorded invasive occurrence — eradication/management work generates regulated plant biomass."});
+    });
+    if(!n)out.errors.push("iMapInvasives: dataset "+hit.key+" fetched, 0 recent NY priority-species occurrences matched");
+  }catch(e){ out.errors.push("iMapInvasives: "+e.message); }
+}
+
+// Connecticut UST/LUST registry (Socrata) — petroleum tank sites → contaminated soil / oily debris.
+async function ctUstScan(){
+  try{
+    const j=await get("https://data.ct.gov/resource/utni-rddb.json?$limit=300");
+    if(!Array.isArray(j))throw new Error("bad response");
+    const pick=(o,cands)=>{for(const k of Object.keys(o)){for(const c of cands){if(k.toLowerCase().includes(c))return o[k]}}return""};
+    const seen=new Set();let n=0;
+    j.forEach(x=>{
+      const name=pick(x,["facility_name","site_name","facility","owner_name","name"]);
+      if(!name||excl(name))return;
+      const town=pick(x,["town","city","municipality"]);
+      const addr=pick(x,["address","street","location_1","location"]);
+      const status=(pick(x,["tank_status","status"])+"").toLowerCase();
+      if(/removed|closed|permanently/i.test(status))return;   // keep active/temporarily-closed tanks
+      const dk=(name+"|"+town).toUpperCase();
+      if(seen.has(dk)||n>=40)return;seen.add(dk);n++;
+      pushLead("ct",{source:"CT UST Registry",name:String(name).slice(0,90),
+        location:[addr,town].filter(Boolean).join(", ")+" (CT)",cls:"Underground storage tank",registry:true,
+        url:"https://data.ct.gov/Environment-and-Natural-Resources/Underground-Storage-Tanks-USTs-Facility-and-Tank-D/utni-rddb",
+        desc:"Registered UST facility"+(status?" ("+status+")":"")+" — petroleum tank site: closure/removal, oily debris, and contaminated-soil prospect."});
+    });
+    if(!n)out.errors.push("CT UST: dataset fetched, 0 rows passed filters — verify field names");
+  }catch(e){ out.errors.push("CT UST: "+e.message); }
+}
+
 (async ()=>{
-  await Promise.all([fdaScans(), fsisScan(), cpscScan(), spillScan(), remediationScans(), complyScans(), eventsScans(), zwtlScan(), bidScans()]);
+  await Promise.all([fdaScans(), fsisScan(), cpscScan(), spillScan(), remediationScans(), complyScans(), eventsScans(), zwtlScan(), bidScans(), hpaiScan(), samScan(), ctsourceScan(), commbuysScan(), invasiveScan(), ctUstScan()]);
   const sortHot=(a,b)=>((b.hot?1:0)-(a.hot?1:0))||String(b.date||"").localeCompare(String(a.date||""));
   TERRS.forEach(t=>{ out.territories[t].leads.sort(sortHot); });
   fs.writeFileSync("leads.json", JSON.stringify(out));

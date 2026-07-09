@@ -930,6 +930,7 @@ function onToItem(terr,r){
   if(r.zwtl||r.stream==="ZWTL Conversion")it.tags.zwtl=1;
   if(r.bid||r.stream==="Government Bid")it.tags.bid=1;
   if(r.invasive)it.tags.invasive=it.tags.physical=1;
+  if(r.aphis)it.tags.aphis=it.tags.physical=1;
   if(r.registry||/EPA RCRA|EPA TRI|Title V|NYSDEC CBS|NYSDEC$|NJDEP KCS|CT DEEP Sites|MassDEP/.test(r.source||""))it.tags.registryOnly=1;
   if(/EPA RCRA|EPA TRI|Title V/.test(r.source||""))it.tags.rcra=1;
   if(/FDA|FSIS|CPSC/.test(r.source||"")){it.tags.recall=1;if(r.hot){it.tags.recallHot=1}}
