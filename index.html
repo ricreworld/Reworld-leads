@@ -1080,6 +1080,9 @@ function watchCard(terr,w,secKey){
   </article>`;
 }
 
+/* which overnight source names satisfy each live source when the browser fetch
+   is CORS-blocked — EPA ECHO especially rejects cross-origin calls */
+const SRC_COVER={echo:/EPA RCRA/i,fda:/^FDA /i,usda:/FSIS/i,spills:/NY Spill/i,nysdec:/^NYSDEC/i,njkcs:/NJDEP/i,ctsites:/CT DEEP Sites/i,ctspills:/CT DEEP Spill/i,masites:/MassDEP/i};
 function renderScanBar(terr){
   const el=$("#scanbar-"+terr);if(!el)return;
   const state=SCANSTATE[terr]||{};
@@ -1088,7 +1091,12 @@ function renderScanBar(terr){
     const st=state[s.id];
     if(!st)return `<span class="busy">${esc(s.label)} —</span>`;
     if(st.status==="busy")return `<span class="busy">${esc(s.label)} scanning…</span>`;
-    if(st.status==="fail")return `<span class="src-fail">${esc(s.label)} scan failed — results may be incomplete. <a href="#" data-retry="${esc(terr)}">Retry.</a></span>`;
+    if(st.status==="fail"){
+      const rx=SRC_COVER[s.id];
+      if(rx&&overnightLeads(terr).some(l=>rx.test(l.source||"")))
+        return `<span>${esc(s.label)} via overnight scan <span class="ok">✓</span></span>`;
+      return `<span class="src-fail">${esc(s.label)} scan failed — results may be incomplete. <a href="#" data-retry="${esc(terr)}">Retry.</a></span>`;
+    }
     return `<span>${esc(s.label)} ${esc(st.when)} <span class="ok">✓</span></span>`;
   });
   parts.push(OVERNIGHT_STAMP
