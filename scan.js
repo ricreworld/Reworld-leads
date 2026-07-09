@@ -629,7 +629,7 @@ async function invasiveScan(){
         url:"https://www.nyimapinvasives.org/",
         desc:"Recorded invasive occurrence — eradication/management work generates regulated plant biomass."});
     });
-    if(!n)out.errors.push("iMapInvasives: dataset "+hit.key+" fetched, 0 recent NY priority-species occurrences matched");
+    if(!n)out.errors.push("iMapInvasives: "+(hit?("dataset "+hit.key):"species fallback")+" queried, 0 recent NY priority-species occurrences matched");
   }catch(e){ out.errors.push("iMapInvasives: "+e.message); }
 }
 
