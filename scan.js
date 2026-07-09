@@ -53,6 +53,7 @@ function classifyStream(txt){
 const TERRS = ["ny","nnj","snj","ct","ma"];
 const out = { generated: new Date().toISOString(), territories: {}, errors: [] };
 TERRS.forEach(t => out.territories[t] = { leads: [], bids: [] });
+const unent = v => String(v==null?"":v).replace(/&amp;/g,"&").replace(/&#0?39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,"<").replace(/&gt;/g,">");
 const excl = n => EXCLUDED.some(e => (n||"").toUpperCase().includes(e));
 
 // push helper: stamps stream + drops sewage before anything lands on the board
@@ -150,11 +151,13 @@ async function fsisScan(){
     const arr = Array.isArray(j)?j:(j.results||[]);
     arr.slice(0,200).forEach(x=>{
       const states=(x.field_states||"")+"";
-      const name=x.field_establishment||x.field_title||"FSIS recall";
+      let name=x.field_establishment||x.field_title||"FSIS recall";
+      if(Array.isArray(name))name=name[0]||unent(x.field_title||"")||"FSIS recall";
+      name=unent(name);
       if(excl(name))return;
       const reason=(x.field_recall_reason||"")+" "+(x.field_title||"");
       const hot=DESTROY.test(reason);
-      const base={source:"USDA FSIS",name,date:(x.field_recall_date||"").slice(0,10),cls:x.field_recall_classification||"",hot,url:"https://www.fsis.usda.gov/recalls",desc:(x.field_title||"").slice(0,200)};
+      const base={source:"USDA FSIS",name,date:(x.field_recall_date||"").slice(0,10),cls:x.field_recall_classification||"",hot,url:"https://www.fsis.usda.gov/recalls",desc:unent(x.field_title||"").slice(0,200)};
       if(/New York/i.test(states))pushLead("ny",{...base,location:"NY distribution"});
       if(/New Jersey/i.test(states)){pushLead("nnj",{...base,location:"NJ distribution"});pushLead("snj",{...base,location:"NJ distribution"});}
       if(/Connecticut/i.test(states))pushLead("ct",{...base,location:"CT distribution"});
@@ -166,7 +169,7 @@ async function cpscScan(){
   try{
     const since=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
     const j = await get(`https://www.saferproducts.gov/RestWebServices/Recall?format=json&RecallDateStart=${since}`);
-    (Array.isArray(j)?j:[]).slice(0,30).forEach(x=>{
+    (Array.isArray(j)?j:[]).slice(0,10).forEach(x=>{
       const name=(x.Manufacturers&&x.Manufacturers[0]&&x.Manufacturers[0].Name)||(x.Products&&x.Products[0]&&x.Products[0].Name)||"CPSC recall";
       if(excl(name))return;
       const hazard=(x.Hazards&&x.Hazards[0]&&x.Hazards[0].Name)||"";
@@ -390,9 +393,12 @@ async function eventsScans(){
     try{
       const j = await get(`https://www.courtlistener.com/api/rest/v4/search/?type=r&q=chapter&court=${courts}&order_by=dateFiled+desc`);
       let n=0;
+      const BIZ=/\b(LLC|L\.L\.C|INC|CORP|CO\.|LTD|LP|LLP|COMPANY|ENTERPRISES?|GROUP|HOLDINGS?|INDUSTR|MANUFACTUR|FOODS?|PHARMA|LABS?|LABORATOR|DISTRIBUT|LOGISTICS|SUPPLY|PRODUCTS?|BRANDS?|RETAIL|STORES?|MARKET)\b/i;
       ((j&&j.results)||[]).forEach(x=>{
         const name=x.caseName||x.case_name||"";
-        if(!name||n>=12)return; n++;
+        if(!name||n>=12)return;
+        if(!BIZ.test(name))return;   // personal consumer filings are not prospects
+        n++;
         pushLead(terr,{source:"Bankruptcy Ct",name:name.slice(0,80),url:"https://www.courtlistener.com/?type=r&q=chapter&order_by=dateFiled+desc",location:loc,date:(x.dateFiled||x.date_filed||"").slice(0,10),cls:"Filing",desc:"Recent bankruptcy filing — if distributor/retailer/manufacturer, liquidated inventory may need certified brand-protection destruction. Verify entity type."});
       });
     }catch(e){ out.errors.push("Bankruptcy "+terr+": "+e.message); }
@@ -480,17 +486,29 @@ async function hpaiScan(){
   const STATES=[["New York",["ny"]],["New Jersey",["nnj","snj"]],["Connecticut",["ct"]],["Massachusetts",["ma"]]];
   for(const [pageUrl,kind] of PAGES){
     try{
-      const html=await getText(pageUrl);
-      // prefer a linked CSV dataset if the page offers one
-      const csvHref=(html.match(/href="([^"]+\.csv[^"]*)"/i)||[])[1];
-      let rows=[];
-      if(csvHref){
-        const csvUrl=csvHref.startsWith("http")?csvHref:new URL(csvHref,pageUrl).href;
-        const csv=await getText(csvUrl);
-        rows=csv.split(/\r?\n/);
-      }else{
-        rows=html.replace(/<[^>]+>/g,"|").split(/\n|\|{2,}/);
+      let rows=[],got="";
+      // known published CSVs first, then any CSV linked from the page, then the page text itself
+      const CSV_CANDIDATES=[
+        "https://www.aphis.usda.gov/sites/default/files/commercial-backyard-flocks.csv",
+        "https://www.aphis.usda.gov/sites/default/files/hpai-mammals.csv",
+        "https://www.aphis.usda.gov/sites/default/files/hpai-livestock-detections.csv"
+      ];
+      for(const cu of CSV_CANDIDATES){
+        if(got)break;
+        try{const csv=await getText(cu);if(csv&&csv.includes(",")&&csv.length>200){rows=csv.split(/\r?\n/);got=cu}}catch(e){}
       }
+      const html=got?"":await getText(pageUrl);
+      if(!got){
+        const csvHref=(html.match(/href="([^"]+\.csv[^"]*)"/i)||[])[1];
+        if(csvHref){
+          const csvUrl=csvHref.startsWith("http")?csvHref:new URL(csvHref,pageUrl).href;
+          const csv=await getText(csvUrl);rows=csv.split(/\r?\n/);got=csvUrl;
+        }else{
+          rows=html.replace(/<[^>]+>/g,"|").split(/\n|\|{2,}/);
+        }
+      }
+      let anyStateRows=0;
+      for(const row of rows){if(/New York|New Jersey|Connecticut|Massachusetts|Ohio|Iowa|California|Texas|Wisconsin|Minnesota/.test(row))anyStateRows++;}
       const since=Date.now()-60*864e5;
       let n=0;
       for(const row of rows){
@@ -508,7 +526,7 @@ async function hpaiScan(){
             desc:"Confirmed HPAI detection ("+kind+") — depopulation and carcass/litter disposal event. APHIS-regulated material: route per facility APHIS rules (never Babylon). Row: "+row.replace(/\s+/g," ").trim().slice(0,140)});
         }
       }
-      if(!n)out.errors.push("APHIS HPAI "+kind+": page fetched, no recent rows matched territory states — check page format");
+      if(!n)out.errors.push("APHIS HPAI "+kind+": fetched "+(got?("CSV "+got.split("/").pop()):"page")+", "+(anyStateRows?("no NY/NJ/CT/MA detections in the last 60 days ("+anyStateRows+" rows in other states — real absence, not an error)"):"no state rows recognized — format changed"));
     }catch(e){ out.errors.push("APHIS HPAI "+kind+": "+e.message); }
   }
 }
@@ -561,7 +579,7 @@ async function ctsourceScan(){
 // COMMBUYS public bid search (MA state + municipal). Same BuySpeed/bso family as NJSTART.
 async function commbuysScan(){
   try{
-    const html=await getText("https://www.commbuys.com/bso/external/publicBids.sdo");
+    const html=await getText("https://www.commbuys.com/bso/view/search/external/advancedSearchBid.xhtml?openBids=true");
     const text=html.replace(/<[^>]+>/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ");
     const rowRe=/(BD-\d{2}-[A-Z0-9-]+)\s+(.{10,160}?)\s+(\d{2}\/\d{2}\/\d{4})/g;
     let m,n=0;
@@ -570,7 +588,7 @@ async function commbuysScan(){
       if(!/environmental|hazardous|remediation|contaminat|waste|pfas|asbestos|landfill|recycl|water/i.test(desc))continue;
       n++;
       pushBid("ma",{source:"COMMBUYS",name:desc.slice(0,90),location:"Massachusetts",date:m[3],cls:"Environmental",bid:true,
-        url:"https://www.commbuys.com/bso/external/publicBids.sdo",
+        url:"https://www.commbuys.com/bso/view/search/external/advancedSearchBid.xhtml?openBids=true",
         desc:"Solicitation "+m[1]+" — "+desc.slice(0,160)+". Public listing; documents free on COMMBUYS."});
     }
     if(!n)out.errors.push("COMMBUYS: page fetched, 0 environmental bid rows matched — verify row regex against live HTML");
@@ -581,10 +599,23 @@ async function commbuysScan(){
 async function invasiveScan(){
   try{
     const ds=await get("https://api.gbif.org/v1/dataset/search?q=iMapInvasives&limit=5");
-    const hit=((ds&&ds.results)||[]).find(d=>/imapinvasives/i.test(d.title||""));
-    if(!hit){ out.errors.push("iMapInvasives: no GBIF dataset matched — verify publication path"); return; }
+    const hit=((ds&&ds.results)||[]).find(d=>/imap\s?invasives/i.test(d.title||""));
     const yr=new Date().getFullYear();
-    const j=await get(`https://api.gbif.org/v1/occurrence/search?datasetKey=${hit.key}&stateProvince=New%20York&year=${yr-1},${yr}&limit=120`);
+    let j;
+    if(hit){
+      j=await get(`https://api.gbif.org/v1/occurrence/search?datasetKey=${hit.key}&stateProvince=New%20York&year=${yr-1},${yr}&limit=120`);
+    }else{
+      // fallback: query priority species directly (any GBIF publisher, NY, last 2 years)
+      const SPECIES=["Reynoutria japonica","Trapa natans","Persicaria perfoliata","Ailanthus altissima","Celastrus orbiculatus"];
+      const merged=[];
+      for(const sp of SPECIES){
+        try{
+          const r=await get(`https://api.gbif.org/v1/occurrence/search?scientificName=${encodeURIComponent(sp)}&stateProvince=New%20York&country=US&year=${yr-1},${yr}&limit=40`);
+          merged.push(...((r&&r.results)||[]));
+        }catch(e){}
+      }
+      j={results:merged};
+    }
     const seen=new Set();let n=0;
     ((j&&j.results)||[]).forEach(o=>{
       const sp=o.vernacularName||o.species||o.scientificName||"";
@@ -607,13 +638,16 @@ async function ctUstScan(){
   try{
     const j=await get("https://data.ct.gov/resource/utni-rddb.json?$limit=300");
     if(!Array.isArray(j))throw new Error("bad response");
-    const pick=(o,cands)=>{for(const k of Object.keys(o)){for(const c of cands){if(k.toLowerCase().includes(c))return o[k]}}return""};
+    const pick=(o,cands)=>{for(const c of cands){for(const k of Object.keys(o)){const lk=k.toLowerCase();if(lk.includes(c)&&!lk.includes("id")&&!lk.includes("number"))return o[k]}}return""};
     const seen=new Set();let n=0;
     j.forEach(x=>{
-      const name=pick(x,["facility_name","site_name","facility","owner_name","name"]);
-      if(!name||excl(name))return;
+      let name=pick(x,["facility_name","site_name","owner_name","name"]);
+      const fid=pick(x,["facility_id","site_id","id"]);
+      if(!name||/^[\d-]+$/.test(String(name).trim()))name="";
       const town=pick(x,["town","city","municipality"]);
-      const addr=pick(x,["address","street","location_1","location"]);
+      const addr=pick(x,["address","street","location"]);
+      if(!name)name=[addr,town].filter(Boolean).join(", ")||("UST facility "+(fid||""));
+      if(excl(name))return;
       const status=(pick(x,["tank_status","status"])+"").toLowerCase();
       if(/removed|closed|permanently/i.test(status))return;   // keep active/temporarily-closed tanks
       const dk=(name+"|"+town).toUpperCase();
