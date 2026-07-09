@@ -1009,6 +1009,7 @@ function actionLinks(it){
   const call=`https://www.google.com/search?q=${encodeURIComponent('"'+name+'" '+loc+' phone number')}`;
   const goog=`https://www.google.com/search?q=${encodeURIComponent('"'+name+'" '+loc)}`;
   const li=`https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(name)}`;
+  const ppl=`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent('"'+name+'" EHS OR "environmental manager" OR "facilities manager" OR "plant manager"')}`;
   const map=`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name+" "+loc)}`;
   const subj=encodeURIComponent(`Reworld — disposal support for ${name}`);
   const body=encodeURIComponent("Hi,\n\nI'm reaching out from Reworld regarding "+(it.source?("the "+it.source+" record"):"a disposal need")+(it.date?(" dated "+it.date):"")+". We handle secure destruction, PFAS destruction (ReAssure), and landfill-banned waste streams with full chain of custody and a Certificate of Destruction on every secure load.\n\nWhere is that material sitting right now, and what volume are we talking about?\n\nThanks,");
@@ -1018,6 +1019,7 @@ function actionLinks(it){
     <a class="btn-act" href="${goog}" target="_blank" rel="noopener">Google</a>
     <a class="btn-act" href="${mail}">Email</a>
     <a class="btn-act" href="${li}" target="_blank" rel="noopener">LinkedIn</a>
+    <a class="btn-act" href="${ppl}" target="_blank" rel="noopener">Find contacts</a>
     <a class="btn-act" href="${map}" target="_blank" rel="noopener">Map it</a>
   </div>`;
 }
